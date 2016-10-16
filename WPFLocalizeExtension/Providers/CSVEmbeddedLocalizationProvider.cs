@@ -6,11 +6,7 @@
 // <author>Sébastien Sevrin</author>
 #endregion
 
-#if SILVERLIGHT
-namespace SLLocalizeExtension.Providers
-#else
 namespace WPFLocalizeExtension.Providers
-#endif
 {
     #region Uses
     using System;
@@ -116,7 +112,7 @@ namespace WPFLocalizeExtension.Providers
         /// <summary>
         /// A dictionary for notification classes for changes of the individual target Parent changes.
         /// </summary>
-        private Dictionary<DependencyObject, ParentChangedNotifier> parentNotifiers = new Dictionary<DependencyObject, ParentChangedNotifier>();
+        private ParentNotifiers parentNotifiers = new ParentNotifiers();
         #endregion
 
         #region Singleton Variables, Properties & Constructor

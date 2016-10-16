@@ -6,11 +6,7 @@
 // <author>Uwe Mayer</author>
 #endregion
 
-#if SILVERLIGHT
-namespace SLLocalizeExtension.Engine
-#else
 namespace WPFLocalizeExtension.Engine
-#endif
 {
     using System;
     using System.ComponentModel;
@@ -75,7 +71,24 @@ namespace WPFLocalizeExtension.Engine
         {
             get { return (string)GetValue(SeparatorProperty); }
             set { SetValue(SeparatorProperty, value); }
-        } 
+        }
+        #endregion
+
+        #region Prefix property
+        /// <summary>
+        /// The Prefix.
+        /// </summary>
+        public static DependencyProperty PrefixProperty = DependencyProperty.Register("Prefix", typeof(string), typeof(LocProxy), new PropertyMetadata(null, PropertiesChanged));
+
+        /// <summary>
+        /// The backing property for <see cref="LocProxy.PrefixProperty"/>
+        /// </summary>
+        [Category("Common")]
+        public string Prefix
+        {
+            get { return (string)GetValue(PrefixProperty); }
+            set { SetValue(PrefixProperty, value); }
+        }
         #endregion
 
         #region Readonly result property
@@ -112,8 +125,17 @@ namespace WPFLocalizeExtension.Engine
 
                     if (proxy.PrependType)
                         key = source.GetType().Name + proxy.Separator + key;
+                    if (!string.IsNullOrEmpty(proxy.Prefix))
+                        key = proxy.Prefix + proxy.Separator + key;
 
-                    proxy.ext.Key = key;
+                    if (proxy.ext == null)
+                    {
+                        proxy.ext = new LocExtension();
+                        proxy.ext.Key = key;
+                        proxy.ext.SetBinding(proxy, proxy.GetType().GetProperty("Result"));
+                    }
+                    else
+                        proxy.ext.Key = key;
                 }
             }
         }
@@ -123,8 +145,6 @@ namespace WPFLocalizeExtension.Engine
         /// </summary>
         public LocProxy()
         {
-            ext = new LocExtension();
-            ext.SetBinding(this, GetType().GetProperty("Result"));
         }
     }
 }

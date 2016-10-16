@@ -7,11 +7,7 @@
 // <author>Uwe Mayer</author>
 #endregion
 
-#if SILVERLIGHT
-namespace SLLocalizeExtension.Extensions
-#else
 namespace WPFLocalizeExtension.Extensions
-#endif
 {
     #region Uses
     using System;
@@ -60,6 +56,8 @@ namespace WPFLocalizeExtension.Extensions
 
         #region Variables
         private static object resourceBufferLock = new object();
+        private static object ResolveLock = new object();
+
         private static Dictionary<string, object> ResourceBuffer = new Dictionary<string, object>();
 
         /// <summary>
@@ -168,11 +166,7 @@ namespace WPFLocalizeExtension.Extensions
                 epProp = ((PropertyInfo)property).Name;
             else if (property is DependencyProperty)
             {
-#if SILVERLIGHT
-                epProp = ((DependencyProperty)property).ToString();
-#else
                 epProp = ((DependencyProperty)property).Name;
-#endif
             }
 
             // What are these names during design time good for? Any suggestions?
@@ -241,10 +235,7 @@ namespace WPFLocalizeExtension.Extensions
         /// </summary>
         /// <value>The initialize value.</value>
         [EditorBrowsable(EditorBrowsableState.Never)]
-#if SILVERLIGHT
-#else
         [ConstructorArgument("key")]
-#endif
         public string InitializeValue { get; set; }
 
         /// <summary>
@@ -322,13 +313,11 @@ namespace WPFLocalizeExtension.Extensions
 
             foreach (var dObj in targetDOs)
             {
-#if !SILVERLIGHT
                 if (LocalizeDictionary.Instance.DefaultProvider is InheritingResxLocalizationProvider)
                 {
                     UpdateNewValue();
                     break;
                 }
-#endif
 
                 var doParent = dObj;
                 while (doParent != null)
@@ -338,22 +327,18 @@ namespace WPFLocalizeExtension.Extensions
                         UpdateNewValue();
                         break;
                     }
-#if !SILVERLIGHT
                     if (!(doParent is Visual) && !(doParent is Visual3D) && !(doParent is FrameworkContentElement))
                     {
                         UpdateNewValue();
                         break;
                     }
-#endif
                     try
                     {
                         DependencyObject doParent2;
 
-#if !SILVERLIGHT
                         if (doParent is FrameworkContentElement)
                             doParent2 = ((FrameworkContentElement)doParent).Parent;
                         else
-#endif
                             doParent2 = doParent.GetParent(true);
 
                         if (doParent2 == null && doParent is FrameworkElement)
@@ -423,11 +408,7 @@ namespace WPFLocalizeExtension.Extensions
                     if (LocalizeDictionary.Instance.GetIsInDesignMode())
                     {
                         // cultureInfo will be set to the current specific culture
-#if SILVERLIGHT
-                        cultureInfo = LocalizeDictionary.Instance.Culture;
-#else
                         cultureInfo = LocalizeDictionary.Instance.SpecificCulture;
-#endif
                     }
                     else
                     {
@@ -439,11 +420,7 @@ namespace WPFLocalizeExtension.Extensions
             else
             {
                 // take the current specific culture
-#if SILVERLIGHT
-                cultureInfo = LocalizeDictionary.Instance.Culture;
-#else
                 cultureInfo = LocalizeDictionary.Instance.SpecificCulture;
-#endif
             }
 
             // return the evaluated culture info
@@ -488,16 +465,10 @@ namespace WPFLocalizeExtension.Extensions
             
             if (endPoint.TargetObject is FrameworkElement)
                 epName = ((FrameworkElement)endPoint.TargetObject).GetValueSync<string>(FrameworkElement.NameProperty);
-#if SILVERLIGHT
-#else
             else if (endPoint.TargetObject is FrameworkContentElement)
                 epName = ((FrameworkContentElement)endPoint.TargetObject).GetValueSync<string>(FrameworkContentElement.NameProperty);
-#endif
 
             var resKeyBase = ci.Name + ":" + targetType.Name + ":";
-            var resKeyNameProp = LocalizeDictionary.Instance.GetFullyQualifiedResourceKey(epName + LocalizeDictionary.GetSeparation(targetObject) + epProp, targetObject);
-            var resKeyName = LocalizeDictionary.Instance.GetFullyQualifiedResourceKey(epName, targetObject);
-            
             // Check, if the key is already in our resource buffer.
             object input = null;
             var isDefaultConverter = this.Converter is DefaultConverter;
@@ -515,6 +486,8 @@ namespace WPFLocalizeExtension.Extensions
             }
             else
             {
+                var resKeyNameProp = LocalizeDictionary.Instance.GetFullyQualifiedResourceKey(epName + LocalizeDictionary.GetSeparation(targetObject) + epProp, targetObject);
+                
                 // Try the automatic lookup function.
                 // First, look for a resource entry named: [FrameworkElement name][Separator][Property name]
                 if (isDefaultConverter && ResourceBuffer.ContainsKey(resKeyBase + resKeyNameProp))
@@ -526,6 +499,8 @@ namespace WPFLocalizeExtension.Extensions
 
                     if (input == null)
                     {
+                        var resKeyName = LocalizeDictionary.Instance.GetFullyQualifiedResourceKey(epName, targetObject);
+
                         // Now, try to look for a resource entry named: [FrameworkElement name]
                         // Note - this has to be nested here, as it would take precedence over the first step in the buffer lookup step.
                         if (isDefaultConverter && ResourceBuffer.ContainsKey(resKeyBase + resKeyName))
@@ -587,11 +562,7 @@ namespace WPFLocalizeExtension.Extensions
         /// <returns>The resolved localized object.</returns>
         public static TValue GetLocalizedValue<TValue>(string key, IValueConverter converter = null, object converterParameter = null)
         {
-#if SILVERLIGHT
-            var targetCulture = LocalizeDictionary.Instance.Culture;
-#else
             var targetCulture = LocalizeDictionary.Instance.SpecificCulture;
-#endif
             return GetLocalizedValue<TValue>(key, targetCulture, null, converter, converterParameter);
         }
 
@@ -620,11 +591,7 @@ namespace WPFLocalizeExtension.Extensions
         /// <returns>The resolved localized object.</returns>
         public static TValue GetLocalizedValue<TValue>(string key, DependencyObject target, IValueConverter converter = null, object converterParameter = null)
         {
-#if SILVERLIGHT
-            var targetCulture = LocalizeDictionary.Instance.Culture;
-#else
             var targetCulture = LocalizeDictionary.Instance.SpecificCulture;
-#endif
             return GetLocalizedValue<TValue>(key, targetCulture, target, converter, converterParameter);
         }
 
@@ -640,37 +607,41 @@ namespace WPFLocalizeExtension.Extensions
         /// <returns>The resolved localized object.</returns>
         public static TValue GetLocalizedValue<TValue>(string key, CultureInfo targetCulture, DependencyObject target, IValueConverter converter = null, object converterParameter = null)
         {
-            var result = default(TValue);
-
-            var resourceKey = LocalizeDictionary.Instance.GetFullyQualifiedResourceKey(key, target);
-
-            // Get the localized object from the dictionary
-            var resKey = targetCulture.Name + ":" + typeof(TValue).Name + ":" + resourceKey;
-            var isDefaultConverter = converter is DefaultConverter;
-
-            if (isDefaultConverter && ResourceBuffer.ContainsKey(resKey))
-                result = (TValue)ResourceBuffer[resKey];
-            else
+            lock (ResolveLock)
             {
-                var localizedObject = LocalizeDictionary.Instance.GetLocalizedObject(resourceKey, target, targetCulture);
+                var result = default(TValue);
 
-                if (localizedObject == null)
-                    return result;
+                var resourceKey = LocalizeDictionary.Instance.GetFullyQualifiedResourceKey(key, target);
 
-                if (converter == null)
-                    converter = new DefaultConverter();
+                // Get the localized object from the dictionary
+                var resKey = targetCulture.Name + ":" + typeof (TValue).Name + ":" + resourceKey;
+                var isDefaultConverter = converter is DefaultConverter;
 
-                var tmp = converter.Convert(localizedObject, typeof(TValue), converterParameter, targetCulture);
-
-                if (tmp is TValue)
+                if (isDefaultConverter && ResourceBuffer.ContainsKey(resKey))
+                    result = (TValue) ResourceBuffer[resKey];
+                else
                 {
-                    result = (TValue)tmp;
-                    if (isDefaultConverter)
-                        SafeAddItemToResourceBuffer(resKey, result);
-                }
-            }
+                    var localizedObject = LocalizeDictionary.Instance.GetLocalizedObject(resourceKey, target,
+                        targetCulture);
 
-            return result;
+                    if (localizedObject == null)
+                        return result;
+
+                    if (converter == null)
+                        converter = new DefaultConverter();
+
+                    var tmp = converter.Convert(localizedObject, typeof (TValue), converterParameter, targetCulture);
+
+                    if (tmp is TValue)
+                    {
+                        result = (TValue) tmp;
+                        if (isDefaultConverter)
+                            SafeAddItemToResourceBuffer(resKey, result);
+                    }
+                }
+
+                return result;
+            }
         }
 
         /// <summary>
@@ -848,12 +819,7 @@ namespace WPFLocalizeExtension.Extensions
             Type targetPropertyType = null;
 
             if (targetProperty is DependencyProperty)
-#if SILVERLIGHT
-                // Dirty reflection hack - get the property type (property not included in the SL DependencyProperty class) from the internal declared field.
-                targetPropertyType = typeof(DependencyProperty).GetField("_propertyType", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(targetProperty) as Type;
-#else
                 targetPropertyType = ((DependencyProperty)targetProperty).PropertyType;
-#endif
             else if (targetProperty is PropertyInfo)
                 targetPropertyType = ((PropertyInfo)targetProperty).PropertyType;
 
